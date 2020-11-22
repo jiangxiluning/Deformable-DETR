@@ -2,6 +2,8 @@
 """
 Various positional encodings for the transformer.
 """
+from typing import List
+
 import math
 import torch
 from torch import nn
@@ -74,6 +76,32 @@ class PositionEmbeddingLearned(nn.Module):
             y_emb.unsqueeze(1).repeat(1, w, 1),
         ], dim=-1).permute(2, 0, 1).unsqueeze(0).repeat(x.shape[0], 1, 1, 1)
         return pos
+
+
+class ScaleEmbeddingLearned(nn.Module):
+
+    def __init__(self, scales=4, dim=256):
+        super().__init__()
+        self.scale_embed = nn.Embedding(scales, embedding_dim=dim)
+
+    def reset_parameters(self):
+        nn.init.uniform_(self.scale_embed.weight)
+
+    def forward(self, tensor_list: NestedTensor, scale: int):
+        #B, C, H, W = tensor_list
+        scale_embed = self.scale_embed(torch.tensor([scale], dtype=torch.long,
+                                                    device=tensor_list.tensors.device))
+        # 1, C, 1, 1
+        scale_embed = scale_embed.unsqueeze(dim=0).unsqueeze(dim=-1).unsqueeze(dim=-1)
+        return scale_embed
+
+
+def build_scale_embedding(args):
+    scales = args.scales
+    dim = args.hidden_dim
+    scale_embedding = ScaleEmbeddingLearned(scales=scales,
+                                            dim=dim)
+    return scale_embedding
 
 
 def build_position_encoding(args):

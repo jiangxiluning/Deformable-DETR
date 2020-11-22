@@ -56,6 +56,17 @@ def get_args_parser():
                         help="Number of query slots")
     parser.add_argument('--pre_norm', action='store_true')
 
+    # Deformable Detr
+    parser.add_argument('--scales', default=4, type=int,
+                        help='Number of scales for Multi-scale Deformable Attention')
+    parser.add_argument('--k', default=4, type=int,
+                        help='Number of reference points for Multi-scale Deformable Attention')
+    parser.add_argument('--last_height', default=16, type=int,
+                        help='The height of C6 feature map')
+    parser.add_argument('--last_width', default=16, type=int,
+                        help='The height of C6 feature map')
+
+
     # * Segmentation
     parser.add_argument('--masks', action='store_true',
                         help="Train segmentation head if the flag is provided")

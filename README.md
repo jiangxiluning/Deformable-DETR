@@ -1,4 +1,4 @@
-[**Deformable-DETR**](http://arxiv.org/abs/2010.04159): [Deformable Transformers for End-to-End Object Detection
+[**Deformable-DETR**](http://arxiv.org/abs/2010.04159): Deformable Transformers for End-to-End Object Detection
 
 
 # Deformable-DETR

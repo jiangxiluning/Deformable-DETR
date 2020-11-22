@@ -82,6 +82,8 @@ class DeformableHeadAttention(nn.Module):
         self.attns = []
         self.offsets = []
 
+        self.reset_parameters()
+
     def reset_parameters(self):
         torch.nn.init.constant_(self.offset_proj.weight, 0.0)
         torch.nn.init.constant_(self.A_proj.weight, 0.0)
@@ -103,9 +105,6 @@ class DeformableHeadAttention(nn.Module):
         init_xy(bias[5], x=self.k, y=-self.k)
         init_xy(bias[6], x=self.k, y=0)
         init_xy(bias[7], x=self.k, y=self.k)
-
-
-        pass
 
     def forward(self, querys: List[torch.Tensor],
                 keys: List[torch.Tensor],

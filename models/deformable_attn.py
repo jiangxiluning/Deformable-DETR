@@ -80,7 +80,6 @@ class DeformableHeadAttention(nn.Module):
         self.need_attn = need_attn
 
         self.attns = []
-        self.ref_points = []
         self.offsets = []
 
     def reset_parameters(self):
@@ -128,7 +127,6 @@ class DeformableHeadAttention(nn.Module):
         if self.need_attn:
             # clear buffer
             self.attns = []
-            self.ref_points = []
             self.offsets = []
 
         # W = 1 is flatten

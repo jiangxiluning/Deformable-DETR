@@ -125,18 +125,18 @@ class Joiner(nn.Sequential):
     def forward(self, tensor_list: NestedTensor):
         xs = self[0](tensor_list)
         out: Dict[int, NestedTensor] = {}
-        pos = []
+        pos: Dict[int, NestedTensor] = {}
         for name, x in xs.items():
             # position encoding
 
             pos_embedding = self[1](x).to(x.tensors.dtype)
             scale_embedding = self[2](int(name)).to(x.tensors.dtype)
             pos_scale = pos_embedding + scale_embedding
-            pos.append(pos_scale)
+            pos[int(name)] = pos_scale
             out[int(name)] = x
 
         # make scale maps' size is ascent order.
-        return [out[3], out[2], out[2], out[0]], pos
+        return [out[3], out[2], out[1], out[0]], [pos[3], pos[2], pos[1], pos[0]]
 
 
 def build_backbone(args):

@@ -76,12 +76,7 @@ class DeformableHeadAttention(nn.Module):
         self.A_proj = nn.Linear(d_model, self.A_dims)
 
         self.wm_proj = nn.Linear(d_model, d_model)
-
         self.need_attn = need_attn
-
-        self.attns = []
-        self.offsets = []
-
         self.reset_parameters()
 
     def reset_parameters(self):
@@ -106,27 +101,23 @@ class DeformableHeadAttention(nn.Module):
         init_xy(bias[6], x=self.k, y=0)
         init_xy(bias[7], x=self.k, y=self.k)
 
-    def forward(self, querys: List[torch.Tensor],
+    def forward(self,
+                query: torch.Tensor,
                 keys: List[torch.Tensor],
-                ref_points: List[torch.Tensor],
+                ref_point: torch.Tensor,
                 mask=None):
         """
 
-        :param querys: B, H, W, C
-        :param keys: B, H, W, C
-        :param ref_points: B, H, W, 2
+        :param query: B, H, W, C
+        :param keys: List[B, H, W, C]
+        :param ref_point: B, H, W, 2
         :param mask:
         :return:
         """
         # if mask is not None:
         #     mask = mask.unsqueeze(1)
-        assert len(keys) == self.scales == len(querys)
+        assert len(keys) == self.scales
         # is_flatten_feat = False
-
-        if self.need_attn:
-            # clear buffer
-            self.attns = []
-            self.offsets = []
 
         # W = 1 is flatten
         # if querys[0].size(2) == 1:
@@ -146,100 +137,95 @@ class DeformableHeadAttention(nn.Module):
         #         # B, H, W, 2
         #         ref_points.append(object_ref_point.clone())
 
-        feats = []
-        abs_ref_points = []
-        for query, hw, ref_point in zip(querys, self.scales_hw, ref_points):
-            nbatches = query.size(0)
-            H, W = hw
+        attns = {'attns': None, 'offsets': None}
 
-            # B, H, W, C
-            query = self.q_proj(query)
+        nbatches, H, W, _ = query.shape
 
-            # B, H, W, 2MLK
-            offset = self.offset_proj(query)
-            # B, H, W, M, 2LK
-            offset = offset.view(nbatches, H, W, self.h, -1)
+        # B, H, W, C
+        query = self.q_proj(query)
 
-            # B, H, W, MLK
-            A = self.A_proj(query)
-            # # B, H, W, M, LK
-            A = A.view(nbatches, H, W, self.h, -1)
-            A = F.softmax(A, dim=-1)
+        # B, H, W, 2MLK
+        offset = self.offset_proj(query)
+        # B, H, W, M, 2LK
+        offset = offset.view(nbatches, H, W, self.h, -1)
 
-            # # B, H, W, M, C_v
-            # query = query.view(nbatches, H, W, self.h, self.d_k)
+        # B, H, W, MLK
+        A = self.A_proj(query)
+        # # B, H, W, M, LK
+        A = A.view(nbatches, H, W, self.h, -1)
+        A = F.softmax(A, dim=-1)
 
-            if self.need_attn:
-                self.attns.append(A)
-                self.offsets.append(offset)
+        # # B, H, W, M, C_v
+        # query = query.view(nbatches, H, W, self.h, self.d_k)
 
-            offset = offset.view(nbatches, H, W, self.h, self.scales, self.k, 2)
-            offset = offset.permute(0, 3, 4, 5, 1, 2, 6).contiguous()
-            # B*M, L, K, H, W, 2
-            offset = offset.view(nbatches*self.h, self.scales, self.k, H, W, 2)
+        if self.need_attn:
+            attns['attns'] = A
+            attns['offsets'] = offset
 
-            A = A.permute(0, 3, 1, 2, 4).contiguous()
-            # B*M, H*W, LK
-            A = A.view(nbatches*self.h, H*W, -1)
+        offset = offset.view(nbatches, H, W, self.h, self.scales, self.k, 2)
+        offset = offset.permute(0, 3, 4, 5, 1, 2, 6).contiguous()
+        # B*M, L, K, H, W, 2
+        offset = offset.view(nbatches*self.h, self.scales, self.k, H, W, 2)
 
-            # # B*M, H*W, LK, 1
-            # A = A.unsqueeze(dim=-1)
+        A = A.permute(0, 3, 1, 2, 4).contiguous()
+        # B*M, H*W, LK
+        A = A.view(nbatches*self.h, H*W, -1)
 
-            # H, W, 2 or  L , 1, 2 for decoder
-            abs_ref_point = restore_scale(width=W,
-                                          height=H,
-                                          ref_point=ref_point)
-            abs_ref_points.append(abs_ref_point)
+        # # B*M, H*W, LK, 1
+        # A = A.unsqueeze(dim=-1)
 
-            scale_features = []
-            for l in range(self.scales):
-                h, w = self.scales_hw[l]
+        # H, W, 2 or  L , 1, 2 for decoder
+        abs_ref_point = restore_scale(width=W,
+                                      height=H,
+                                      ref_point=ref_point)
 
-                # H, W, 2
-                reversed_ref_point = restore_scale(height=h, width=w, ref_point=ref_point)
+        scale_features = []
+        for l in range(self.scales):
+            h, w = self.scales_hw[l]
 
-                # 1, H, W, 2
-                reversed_ref_point = reversed_ref_point.unsqueeze(dim=0)
+            # H, W, 2
+            reversed_ref_point = restore_scale(height=h, width=w, ref_point=ref_point)
 
-                # B, h, w, M, C_v
-                scale_feature = self.k_proj(keys[l]).view(nbatches, h, w, self.h, self.d_k)
-                # B, M, C_v, h, w
-                scale_feature = scale_feature.permute(0, 3, 4, 1, 2).contiguous()
-                # B*M, C_v, h, w
-                scale_feature = scale_feature.view(-1, self.d_k, h, w)
+            # 1, H, W, 2
+            reversed_ref_point = reversed_ref_point.unsqueeze(dim=0)
 
-                k_features = []
+            # B, h, w, M, C_v
+            scale_feature = self.k_proj(keys[l]).view(nbatches, h, w, self.h, self.d_k)
+            # B, M, C_v, h, w
+            scale_feature = scale_feature.permute(0, 3, 4, 1, 2).contiguous()
+            # B*M, C_v, h, w
+            scale_feature = scale_feature.view(-1, self.d_k, h, w)
 
-                for k in range(self.k):
-                    points = reversed_ref_point + offset[:, l, k, :, :, :]
-                    vgrid_x = 2.0 * points[:, :, :, 0] / max(w - 1, 1) - 1.0
-                    vgrid_y = 2.0 * points[:, :, :, 1] / max(h - 1, 1) - 1.0
-                    vgrid_scaled = torch.stack((vgrid_x, vgrid_y), dim=3)
+            k_features = []
 
-                    # B*M, C_v, H, W
-                    feat = F.grid_sample(scale_feature, vgrid_scaled, mode='bilinear', padding_mode='zeros')
-                    k_features.append(feat)
-                # B*M, k, C_v, H, W
-                k_features = torch.stack(k_features, dim=1)
-                scale_features.append(k_features)
+            for k in range(self.k):
+                points = reversed_ref_point + offset[:, l, k, :, :, :]
+                vgrid_x = 2.0 * points[:, :, :, 0] / max(w - 1, 1) - 1.0
+                vgrid_y = 2.0 * points[:, :, :, 1] / max(h - 1, 1) - 1.0
+                vgrid_scaled = torch.stack((vgrid_x, vgrid_y), dim=3)
 
-            # B*M, L, K, C_v, H, W
-            scale_features = torch.stack(scale_features, dim=1)
+                # B*M, C_v, H, W
+                feat = F.grid_sample(scale_feature, vgrid_scaled, mode='bilinear', padding_mode='zeros')
+                k_features.append(feat)
+            # B*M, k, C_v, H, W
+            k_features = torch.stack(k_features, dim=1)
+            scale_features.append(k_features)
 
-            # B*M, H*W, C_v, LK
-            scale_features = scale_features.permute(0, 4, 5, 3, 1, 2).contiguous()
-            scale_features = scale_features.view(nbatches*self.h, H*W, self.d_k, -1)
+        # B*M, L, K, C_v, H, W
+        scale_features = torch.stack(scale_features, dim=1)
 
-            # B*M, H*W, C_v
-            feat = torch.einsum('nlds, nls -> nld', scale_features, A)
+        # B*M, H*W, C_v, LK
+        scale_features = scale_features.permute(0, 4, 5, 3, 1, 2).contiguous()
+        scale_features = scale_features.view(nbatches*self.h, H*W, self.d_k, -1)
 
-            # B, H, W, C
-            feat = feat.view(nbatches, H, W, self.d_k*self.h)
-            feat = self.wm_proj(feat)
+        # B*M, H*W, C_v
+        feat = torch.einsum('nlds, nls -> nld', scale_features, A)
 
-            if self.dropout:
-                feat = self.dropout(feat)
+        # B, H, W, C
+        feat = feat.view(nbatches, H, W, self.d_k*self.h)
+        feat = self.wm_proj(feat)
 
-            feats.append(feat)
+        if self.dropout:
+            feat = self.dropout(feat)
 
-        return feats, abs_ref_points, dict(attns=self.attns, offsets=self.offsets)
+        return feat, abs_ref_point, attns

@@ -4,6 +4,7 @@
 # Deformable-DETR
 
 This an implementation of Deformable-DETR. Codes are based on [DETR](https://github.com/facebookresearch/detr) project.
+My code is inspired by his/her [work]( https://github.com/Windaway/Deformable-Attention-for-Deformable-DETR/blob/main/DFMAtt.py). Many thanks.
 
 
 # Change logs

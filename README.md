@@ -9,6 +9,12 @@ My code is inspired by his/her [work]( https://github.com/Windaway/Deformable-At
 
 # Change logs
 
+- 2020-11-24
+  - add scale embedding
+  - change remove outer loop for scales
+  - add backbone modifications for returning multi-scale feature maps
+  - add test code for using Deformable-Attention module
+
 - 2020-11-22 
   
   add Multi-scale Deformabe Attention Module

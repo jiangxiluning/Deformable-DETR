@@ -5,7 +5,7 @@ import torch
 
 from models.matcher import HungarianMatcher
 from models.position_encoding import PositionEmbeddingSine, PositionEmbeddingLearned
-from models.backbone import Backbone, Joiner, BackboneBase
+from models.backbone import Backbone
 from util import box_ops
 from util.misc import nested_tensor_from_tensor_list
 from hubconf import detr_resnet50, detr_resnet50_panoptic
@@ -119,6 +119,14 @@ class Tester(unittest.TestCase):
 
         feat, ref_points, attns = defomable_attn(querys[0], querys, ref_points[0])
         self.assertTrue(True)
+
+    def test_backbone_forward(self):
+        backbone = Backbone('resnet50', True, True, False)
+        x = nested_tensor_from_tensor_list([torch.rand(3, 200, 200), torch.rand(3, 200, 250)])
+
+        out = backbone(x)
+        for key, value in out.items():
+            print('{} {}'.format(key, value.tensors.shape))
 
 
 if __name__ == '__main__':

@@ -175,9 +175,9 @@ class DeformableHeadAttention(nn.Module):
         # A = A.unsqueeze(dim=-1)
 
         # H, W, 2 or  L , 1, 2 for decoder
-        abs_ref_point = restore_scale(width=W,
-                                      height=H,
-                                      ref_point=ref_point)
+        # abs_ref_point = restore_scale(width=W,
+        #                               height=H,
+        #                               ref_point=ref_point)
 
         scale_features = []
         for l in range(self.scales):
@@ -228,4 +228,4 @@ class DeformableHeadAttention(nn.Module):
         if self.dropout:
             feat = self.dropout(feat)
 
-        return feat, abs_ref_point, attns
+        return feat, attns

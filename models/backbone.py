@@ -78,9 +78,9 @@ class BackboneBase(nn.Module):
         self.body = IntermediateLayerGetter(backbone, return_layers=return_layers)
         self.num_channels = num_channels
 
-        self.c3_conv = nn.Conv2d(backbone.inplanes/4, hidden_dim)
-        self.c4_conv = nn.Conv2d(backbone.inplanes/2, hidden_dim)
-        self.c5_conv = nn.Conv2d(backbone.inplanes, hidden_dim)
+        self.c3_conv = nn.Conv2d(backbone.inplanes//4, hidden_dim, kernel_size=1)
+        self.c4_conv = nn.Conv2d(backbone.inplanes//2, hidden_dim, kernel_size=1)
+        self.c5_conv = nn.Conv2d(backbone.inplanes, hidden_dim, kernel_size=1)
         self.c6_conv = nn.Conv2d(backbone.inplanes, hidden_dim, kernel_size=(3,3), stride=2)
 
     def forward(self, tensor_list: NestedTensor):

@@ -8,12 +8,12 @@ My code is inspired by his/her [work]( https://github.com/Windaway/Deformable-At
 
 # Preparation
 
-For DETR stuff, etc. data preparation, evaluation, and others , please refer to 
+For DETR stuffs, etc. data preparation, evaluation, and others , please refer to 
 [DETR](https://github.com/facebookresearch/detr).
 
 # Training
 
-My machine is equipped with two GTX 2080Ti. Below is the training script for DDP traning.
+My machine is equipped with two GTX 2080TIs. Below is the training script for DDP training.
 ```shell script
 bash train.sh
 ```
@@ -29,7 +29,7 @@ python main.py
 my_output
 ```
 
-If you do not need amp, just remove this flag.
+If you do not need AMP, just remove this flag.
 
 # Change logs
 - 2020-11-29

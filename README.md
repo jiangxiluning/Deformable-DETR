@@ -18,15 +18,20 @@ My machine is equipped with two GTX 2080TIs. Below is the training script for DD
 bash train.sh
 ```
 
-For single gpu training, try below
+For single gpu training, try the code below
 
 ```python
 python main.py
---coco_path
-/home/luning/dev/data/coco
+--output_dir my_output \
+--coco_path ~/dev/data/coco \
+--lr 0.0002 \
+--lr_backbone 0.00001 \
+--num_queries 300 \
+--batch_size 1 \
+--enc_layers 6 \
+--dec_layers 6 \
+--no_aux_loss \
 --amp
---output_dir
-my_output
 ```
 
 If you do not need AMP, just remove this flag.
@@ -37,6 +42,8 @@ If you do not need AMP, just remove this flag.
   - modify transfomer's implementation to be adapted to Deformable-Attention
   - add image mask to MS-Deformable-Attention
   - add automatic mixed precision training
+  - use adam for the optimizer
+  - change lr for projection layers
 
 - 2020-11-24
   - add scale embedding

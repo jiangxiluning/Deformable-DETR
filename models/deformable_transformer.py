@@ -109,7 +109,7 @@ class Transformer(nn.Module):
         query_ref_point = self.query_ref_point_proj(tgt)
         query_ref_point = F.sigmoid(query_ref_point)
 
-        # B, L, 1 ,C
+        # Decoder Layers, L, B ,C
         hs = self.decoder(tgt, memory,
                           query_ref_point,
                           memory_key_padding_masks=masks,

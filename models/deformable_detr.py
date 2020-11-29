@@ -74,6 +74,11 @@ class DETR(nn.Module):
 
         hs, ref_point, _ = self.transformer(tensors, masks, self.query_embed.weight, poses)
 
+        # DL, L, B, d_model -> DL, B, L, d_model
+        hs = hs.transpose(1, 2).contiguous()
+        # L, B, 2 -> B, L, 2
+        ref_point = ref_point.transpose(0, 1).contiguous()
+
         outputs_class = self.class_embed(hs)
 
         inversed_ref_point = - torch.log(1 / (ref_point + 1e-10) - 1 + 1e-10)

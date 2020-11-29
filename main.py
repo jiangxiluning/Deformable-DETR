@@ -9,6 +9,7 @@ from pathlib import Path
 import numpy as np
 import torch
 from torch.utils.data import DataLoader, DistributedSampler
+from torch.cuda.amp import GradScaler
 
 import datasets
 import util.misc as utils
@@ -27,6 +28,7 @@ def get_args_parser():
     parser.add_argument('--lr_drop', default=200, type=int)
     parser.add_argument('--clip_max_norm', default=0.1, type=float,
                         help='gradient clipping max norm')
+    parser.add_argument('--amp', action='store_true', help='automatic mixed precision training')
 
     # Model parameters
     parser.add_argument('--frozen_weights', type=str, default=None,
@@ -65,7 +67,6 @@ def get_args_parser():
                         help='The height of C6 feature map')
     parser.add_argument('--last_width', default=16, type=int,
                         help='The height of C6 feature map')
-
 
     # * Segmentation
     parser.add_argument('--masks', action='store_true',
@@ -199,14 +200,22 @@ def main(args):
             utils.save_on_master(coco_evaluator.coco_eval["bbox"].eval, output_dir / "eval.pth")
         return
 
+    scaler = GradScaler(enabled=args.amp)
+
     print("Start training")
     start_time = time.time()
     for epoch in range(args.start_epoch, args.epochs):
         if args.distributed:
             sampler_train.set_epoch(epoch)
-        train_stats = train_one_epoch(
-            model, criterion, data_loader_train, optimizer, device, epoch,
-            args.clip_max_norm)
+        train_stats = train_one_epoch(model=model,
+                                      criterion=criterion,
+                                      data_loader=data_loader_train,
+                                      optimizer=optimizer,
+                                      device=device,
+                                      epoch=epoch,
+                                      max_norm=args.clip_max_norm,
+                                      scaler=scaler,
+                                      amp=args.amp)
         lr_scheduler.step()
         if args.output_dir:
             checkpoint_paths = [output_dir / 'checkpoint.pth']

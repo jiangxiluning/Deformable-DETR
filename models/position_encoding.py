@@ -92,7 +92,7 @@ class ScaleEmbeddingLearned(nn.Module):
         scale_embed = self.scale_embed(torch.tensor([scale], dtype=torch.long,
                                                     device=tensor_list.tensors.device))
         # 1, C, 1, 1
-        scale_embed = scale_embed.unsqueeze(dim=0).unsqueeze(dim=-1).unsqueeze(dim=-1)
+        scale_embed = scale_embed.unsqueeze(dim=-1).unsqueeze(dim=-1)
         return scale_embed
 
 

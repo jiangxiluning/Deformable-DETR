@@ -61,8 +61,8 @@ class BackboneBase(nn.Module):
     def __init__(self, backbone: nn.Module,
                  train_backbone: bool,
                  num_channels: int,
-                 return_interm_layers: bool,
-                 hidden_dim: int=256):
+                 return_interm_layers: bool = True,
+                 hidden_dim: int = 256):
         super().__init__()
         for name, parameter in backbone.named_parameters():
             if not train_backbone or 'layer2' not in name and 'layer3' not in name and 'layer4' not in name:
@@ -86,9 +86,11 @@ class BackboneBase(nn.Module):
     def forward(self, tensor_list: NestedTensor):
         xs = self.body(tensor_list.tensors)
         out: Dict[str, NestedTensor] = {}
+        m = tensor_list.mask
+        assert m is not None
+
         for name, x in xs.items():
-            # m = tensor_list.mask
-            # assert m is not None
+
             # mask = F.interpolate(m[None].float(), size=x.shape[-2:]).to(torch.bool)[0]
 
             if name == '0':
@@ -97,10 +99,12 @@ class BackboneBase(nn.Module):
                 scale_map = self.c4_conv(x)
             else:
                 scale_map = self.c5_conv(x)
-            out[name] = NestedTensor(scale_map, None)
+            mask = F.interpolate(m[None].float(), size=scale_map.shape[-2:]).to(torch.bool)[0]
+            out[name] = NestedTensor(scale_map, mask)
 
         c6 = self.c6_conv(xs['2'])
-        out['3'] = NestedTensor(c6, None)
+        mask = F.interpolate(m[None].float(), size=c6.shape[-2:]).to(torch.bool)[0]
+        out['3'] = NestedTensor(c6, mask)
 
         return out
 
@@ -130,7 +134,7 @@ class Joiner(nn.Sequential):
             # position encoding
 
             pos_embedding = self[1](x).to(x.tensors.dtype)
-            scale_embedding = self[2](int(name)).to(x.tensors.dtype)
+            scale_embedding = self[2](x, int(name)).to(x.tensors.dtype)
             pos_scale = pos_embedding + scale_embedding
             pos[int(name)] = pos_scale
             out[int(name)] = x
@@ -144,7 +148,10 @@ def build_backbone(args):
     scale_embedding = build_scale_embedding(args)
 
     train_backbone = args.lr_backbone > 0
-    return_interm_layers = args.masks
+
+    # always return interm_layers
+    # return_interm_layers = args.masks
+    return_interm_layers = True
     backbone = Backbone(args.backbone, train_backbone, return_interm_layers, args.dilation)
     model = Joiner(backbone, position_embedding, scale_embedding)
     model.num_channels = backbone.num_channels

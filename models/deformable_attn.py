@@ -1,6 +1,4 @@
-from typing import List, Tuple, Dict
-import copy
-import math
+from typing import List, Optional
 
 import torch
 import torch.nn.modules as nn
@@ -21,10 +19,9 @@ def generate_ref_points(width: int,
 def restore_scale(width: int,
                   height: int,
                   ref_point: torch.Tensor):
-
     new_point = ref_point.clone().detach()
-    new_point[:, :, 0] = new_point[:, :, 0] * (width - 1)
-    new_point[:, :, 1] = new_point[:, :, 1] * (height - 1)
+    new_point[..., 0] = new_point[..., 0] * (width - 1)
+    new_point[..., 1] = new_point[..., 1] * (height - 1)
 
     return new_point
 
@@ -56,8 +53,8 @@ class DeformableHeadAttention(nn.Module):
 
         self.scales_hw = []
         for i in range(scales):
-            self.scales_hw.append([last_feat_height * 2**i,
-                                   last_feat_width * 2**i])
+            self.scales_hw.append([last_feat_height * 2 ** i,
+                                   last_feat_width * 2 ** i])
 
         self.dropout = None
         if self.dropout:
@@ -68,8 +65,8 @@ class DeformableHeadAttention(nn.Module):
         self.last_feat_height = last_feat_height
         self.last_feat_width = last_feat_width
 
-        self.offset_dims = 2*self.h*self.k*self.scales
-        self.A_dims = self.h*self.k*self.scales
+        self.offset_dims = 2 * self.h * self.k * self.scales
+        self.A_dims = self.h * self.k * self.scales
 
         # 2MLK for offsets MLK for A_mlqk
         self.offset_proj = nn.Linear(d_model, self.offset_dims)
@@ -83,7 +80,7 @@ class DeformableHeadAttention(nn.Module):
         torch.nn.init.constant_(self.offset_proj.weight, 0.0)
         torch.nn.init.constant_(self.A_proj.weight, 0.0)
 
-        torch.nn.init.constant_(self.A_proj.bias, 1/(self.scales * self.k))
+        torch.nn.init.constant_(self.A_proj.bias, 1 / (self.scales * self.k))
 
         def init_xy(bias, x, y):
             torch.nn.init.constant_(bias[:, 0], float(x))
@@ -105,41 +102,25 @@ class DeformableHeadAttention(nn.Module):
                 query: torch.Tensor,
                 keys: List[torch.Tensor],
                 ref_point: torch.Tensor,
-                mask=None):
+                query_mask: torch.Tensor = None,
+                key_masks: Optional[torch.Tensor] = None,
+                ):
         """
-
+        :param key_masks:
+        :param query_mask:
         :param query: B, H, W, C
         :param keys: List[B, H, W, C]
         :param ref_point: B, H, W, 2
-        :param mask:
         :return:
         """
-        # if mask is not None:
-        #     mask = mask.unsqueeze(1)
+        if key_masks is None:
+            key_masks = [None] * len(keys)
+
         assert len(keys) == self.scales
-        # is_flatten_feat = False
-
-        # W = 1 is flatten
-        # if querys[0].size(2) == 1:
-        #     is_flatten_feat = True
-
-        # ref_points = []
-        # if not is_flatten_feat:
-        #     # For encoder, we generate mesh grid
-        #     for hw in self.scales_hw:
-        #         h, w = hw
-        #         ref_points.append(generate_ref_points(width=w, height=h))
-        # else:
-        #     # For decoder, we predict ref point
-        #     object_ref_point = self.ref_point_proj(querys[0])
-        #     object_ref_point = F.sigmoid(object_ref_point)
-        #     for _ in querys:
-        #         # B, H, W, 2
-        #         ref_points.append(object_ref_point.clone())
 
         attns = {'attns': None, 'offsets': None}
 
-        nbatches, H, W, _ = query.shape
+        nbatches, query_height, query_width, _ = query.shape
 
         # B, H, W, C
         query = self.q_proj(query)
@@ -147,50 +128,63 @@ class DeformableHeadAttention(nn.Module):
         # B, H, W, 2MLK
         offset = self.offset_proj(query)
         # B, H, W, M, 2LK
-        offset = offset.view(nbatches, H, W, self.h, -1)
+        offset = offset.view(nbatches, query_height, query_width, self.h, -1)
 
         # B, H, W, MLK
         A = self.A_proj(query)
-        # # B, H, W, M, LK
-        A = A.view(nbatches, H, W, self.h, -1)
+
+        # B, H, W, 1, mask before softmax
+        if query_mask is not None:
+            query_mask_ = query_mask.unsqueeze(dim=-1)
+            _, _, _, mlk = A.shape
+            query_mask_ = query_mask_.expand(nbatches, query_height, query_width, mlk)
+            A = torch.masked_fill(A, mask=query_mask_, value=float('-inf'))
+
+        # B, H, W, M, LK
+        A = A.view(nbatches, query_height, query_width, self.h, -1)
         A = F.softmax(A, dim=-1)
 
-        # # B, H, W, M, C_v
-        # query = query.view(nbatches, H, W, self.h, self.d_k)
+        # mask nan position
+        if query_mask is not None:
+            # B, H, W, 1, 1
+            query_mask_ = query_mask.unsqueeze(dim=-1).unsqueeze(dim=-1)
+            A = torch.masked_fill(A, query_mask_.expand_as(A), 0.0)
 
         if self.need_attn:
             attns['attns'] = A
             attns['offsets'] = offset
 
-        offset = offset.view(nbatches, H, W, self.h, self.scales, self.k, 2)
+        offset = offset.view(nbatches, query_height, query_width, self.h, self.scales, self.k, 2)
         offset = offset.permute(0, 3, 4, 5, 1, 2, 6).contiguous()
         # B*M, L, K, H, W, 2
-        offset = offset.view(nbatches*self.h, self.scales, self.k, H, W, 2)
+        offset = offset.view(nbatches * self.h, self.scales, self.k, query_height, query_width, 2)
 
         A = A.permute(0, 3, 1, 2, 4).contiguous()
         # B*M, H*W, LK
-        A = A.view(nbatches*self.h, H*W, -1)
-
-        # # B*M, H*W, LK, 1
-        # A = A.unsqueeze(dim=-1)
-
-        # H, W, 2 or  L , 1, 2 for decoder
-        # abs_ref_point = restore_scale(width=W,
-        #                               height=H,
-        #                               ref_point=ref_point)
+        A = A.view(nbatches * self.h, query_height * query_width, -1)
 
         scale_features = []
         for l in range(self.scales):
-            h, w = self.scales_hw[l]
+            feat_map = keys[l]
+            _, h, w, _ = feat_map.shape
 
-            # H, W, 2
+            key_mask = key_masks[l]
+
+            # B, H, W, 2
             reversed_ref_point = restore_scale(height=h, width=w, ref_point=ref_point)
 
-            # 1, H, W, 2
-            reversed_ref_point = reversed_ref_point.unsqueeze(dim=0)
+            # B, H, W, 2 -> B*M, H, W, 2
+            reversed_ref_point = reversed_ref_point.repeat(self.h, 1, 1, 1)
 
             # B, h, w, M, C_v
-            scale_feature = self.k_proj(keys[l]).view(nbatches, h, w, self.h, self.d_k)
+            scale_feature = self.k_proj(feat_map).view(nbatches, h, w, self.h, self.d_k)
+
+            if key_mask is not None:
+                # B, h, w, 1, 1
+                key_mask = key_mask.unsqueeze(dim=-1).unsqueeze(dim=-1)
+                key_mask = key_mask.expand(nbatches, h, w, self.h, self.d_k)
+                scale_feature = torch.masked_fill(scale_feature, mask=key_mask, value=0)
+
             # B, M, C_v, h, w
             scale_feature = scale_feature.permute(0, 3, 4, 1, 2).contiguous()
             # B*M, C_v, h, w
@@ -216,13 +210,13 @@ class DeformableHeadAttention(nn.Module):
 
         # B*M, H*W, C_v, LK
         scale_features = scale_features.permute(0, 4, 5, 3, 1, 2).contiguous()
-        scale_features = scale_features.view(nbatches*self.h, H*W, self.d_k, -1)
+        scale_features = scale_features.view(nbatches * self.h, query_height * query_width, self.d_k, -1)
 
         # B*M, H*W, C_v
         feat = torch.einsum('nlds, nls -> nld', scale_features, A)
 
         # B, H, W, C
-        feat = feat.view(nbatches, H, W, self.d_k*self.h)
+        feat = feat.view(nbatches, query_height, query_width, self.d_k * self.h)
         feat = self.wm_proj(feat)
 
         if self.dropout:

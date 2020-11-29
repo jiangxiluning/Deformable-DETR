@@ -15,7 +15,8 @@ from .backbone import build_backbone
 from .matcher import build_matcher
 from .segmentation import (DETRsegm, PostProcessPanoptic, PostProcessSegm,
                            dice_loss, sigmoid_focal_loss)
-from .transformer import build_transformer
+# from .transformer import build_transformer
+from .deformable_transformer import build_transformer
 
 
 class DETR(nn.Module):
@@ -70,10 +71,11 @@ class DETR(nn.Module):
             masks.append(mask)
 
         assert mask is not None
-        hs, ref_point, _ = self.transformer(tensors, masks, self.query_embed.weight, poses)[0]
 
-        outputs_class = self.class_embed(hs)
-        outputs_coord = self.bbox_embed(hs).sigmoid()
+        hs, ref_point, _ = self.transformer(tensors, masks, self.query_embed.weight, poses)
+
+        outputs_class = self.class_embed(hs[-1])
+        outputs_coord = self.bbox_embed(hs[-1]).sigmoid()
         out = {'pred_logits': outputs_class[-1], 'pred_boxes': outputs_coord[-1]}
         if self.aux_loss:
             out['aux_outputs'] = self._set_aux_loss(outputs_class, outputs_coord)

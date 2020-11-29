@@ -128,6 +128,14 @@ class Tester(unittest.TestCase):
         for key, value in out.items():
             print('{} {}'.format(key, value.tensors.shape))
 
+    def test_transformer_forward(self):
+        backbone = Backbone('resnet50', True, True, False)
+        x = nested_tensor_from_tensor_list([torch.rand(3, 200, 200), torch.rand(3, 200, 250)])
+
+        out = backbone(x)
+        for key, value in out.items():
+            print('{} {}'.format(key, value.tensors.shape))
+
 
 if __name__ == '__main__':
     unittest.main()

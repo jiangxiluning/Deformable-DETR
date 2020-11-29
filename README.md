@@ -8,6 +8,10 @@ My code is inspired by his/her [work]( https://github.com/Windaway/Deformable-At
 
 
 # Change logs
+- 2020-11-29
+  - integrate MS-Deformable-Attention into DETR architecture
+  - modify transfomer's implementation to be adapted to Deformable-Attention
+  - add image mask to MS-Deformable-Attention
 
 - 2020-11-24
   - add scale embedding
@@ -17,7 +21,7 @@ My code is inspired by his/her [work]( https://github.com/Windaway/Deformable-At
 
 - 2020-11-22 
   
-  add Multi-scale Deformabe Attention Module
+  - add Multi-scale Deformabe Attention Module
   
 
 

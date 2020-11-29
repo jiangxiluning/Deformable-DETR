@@ -74,8 +74,14 @@ class DETR(nn.Module):
 
         hs, ref_point, _ = self.transformer(tensors, masks, self.query_embed.weight, poses)
 
-        outputs_class = self.class_embed(hs[-1])
-        outputs_coord = self.bbox_embed(hs[-1]).sigmoid()
+        outputs_class = self.class_embed(hs)
+
+        inversed_ref_point = - torch.log(1 / (ref_point + 1e-10) - 1 + 1e-10)
+        outputs_coord = self.bbox_embed(hs)
+        outputs_coord[..., 0] = outputs_coord[..., 0] + inversed_ref_point[..., 0]
+        outputs_coord[..., 1] = outputs_coord[..., 1] + inversed_ref_point[..., 1]
+        outputs_coord = torch.sigmoid(outputs_coord)
+
         out = {'pred_logits': outputs_class[-1], 'pred_boxes': outputs_coord[-1]}
         if self.aux_loss:
             out['aux_outputs'] = self._set_aux_loss(outputs_class, outputs_coord)

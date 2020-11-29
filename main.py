@@ -24,8 +24,8 @@ def get_args_parser():
     parser.add_argument('--lr_backbone', default=1e-5, type=float)
     parser.add_argument('--batch_size', default=2, type=int)
     parser.add_argument('--weight_decay', default=1e-4, type=float)
-    parser.add_argument('--epochs', default=300, type=int)
-    parser.add_argument('--lr_drop', default=200, type=int)
+    parser.add_argument('--epochs', default=50, type=int)
+    parser.add_argument('--lr_drop', default=40, type=int)
     parser.add_argument('--clip_max_norm', default=0.1, type=float,
                         help='gradient clipping max norm')
     parser.add_argument('--amp', action='store_true', help='automatic mixed precision training')
@@ -140,19 +140,36 @@ def main(args):
     n_parameters = sum(p.numel() for p in model.parameters() if p.requires_grad)
     print('number of params:', n_parameters)
 
+    backbone_params = []
+    proj_params = []
+    others = []
+
+    for n, p in model_without_ddp.named_parameters():
+        if 'backbone' in n:
+            backbone_params.append(p)
+        elif 'offset_proj' in n or 'query_ref_point_proj' in n:
+            proj_params.append(p)
+        else:
+            others.append(p)
+
     param_dicts = [
-        {"params": [p for n, p in model_without_ddp.named_parameters() if "backbone" not in n and p.requires_grad]},
-        {
-            "params": [p for n, p in model_without_ddp.named_parameters() if "backbone" in n and p.requires_grad],
-            "lr": args.lr_backbone,
-        },
+        {'params': others},
+        {'params': backbone_params, 'lr': args.lr_backbone},
+        {'params': proj_params, 'lr': args.lr * 0.1}
     ]
-    optimizer = torch.optim.AdamW(param_dicts, lr=args.lr,
-                                  weight_decay=args.weight_decay)
+
+
+
+    # optimizer = torch.optim.AdamW(param_dicts, lr=args.lr,
+    #                               weight_decay=args.weight_decay)
+    optimizer = torch.optim.Adam(param_dicts, lr=args.lr,
+                                 weight_decay=args.weight_decay)
     lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, args.lr_drop)
 
     dataset_train = build_dataset(image_set='train', args=args)
     dataset_val = build_dataset(image_set='val', args=args)
+    # dataset_train = dataset_train
+    # dataset_val = dataset_train
 
     if args.distributed:
         sampler_train = DistributedSampler(dataset_train)

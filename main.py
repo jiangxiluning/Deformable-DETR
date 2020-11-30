@@ -130,6 +130,13 @@ def main(args):
     np.random.seed(seed)
     random.seed(seed)
 
+    dataset_train = build_dataset(image_set='train', args=args)
+    dataset_val = build_dataset(image_set='val', args=args)
+    focal_alphas = dataset_train.get_focal_alphas()
+    # dataset_train = dataset_train
+    # dataset_val = dataset_train
+    args.focal_alphas = focal_alphas
+
     model, criterion, postprocessors = build_model(args)
     model.to(device)
 
@@ -158,18 +165,13 @@ def main(args):
         {'params': proj_params, 'lr': args.lr * 0.1}
     ]
 
-
-
     # optimizer = torch.optim.AdamW(param_dicts, lr=args.lr,
     #                               weight_decay=args.weight_decay)
     optimizer = torch.optim.Adam(param_dicts, lr=args.lr,
                                  weight_decay=args.weight_decay)
     lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, args.lr_drop)
 
-    dataset_train = build_dataset(image_set='train', args=args)
-    dataset_val = build_dataset(image_set='val', args=args)
-    # dataset_train = dataset_train
-    # dataset_val = dataset_train
+
 
     if args.distributed:
         sampler_train = DistributedSampler(dataset_train)

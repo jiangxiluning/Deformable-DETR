@@ -37,6 +37,9 @@ python main.py
 If you do not need AMP, just remove this flag.
 
 # Change logs
+- 2020-11-30
+  - add focal loss for classification
+
 - 2020-11-29
   - integrate MS-Deformable-Attention into DETR architecture
   - modify transfomer's implementation to be adapted to Deformable-Attention

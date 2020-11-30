@@ -32,6 +32,17 @@ class CocoDetection(torchvision.datasets.CocoDetection):
             img, target = self._transforms(img, target)
         return img, target
 
+    def get_focal_alphas(self):
+
+        num_images = len(self.coco.imgs)
+        alphas = [1/num_images] * 92
+        # for non-object
+        # alphas[-1] = 1
+        for i in self.coco.cats:
+            num_cat_images = self.coco.getImgIds(catIds=i)
+            alphas[i] = 1 / len(num_cat_images)
+        return alphas
+
 
 def convert_coco_poly_to_mask(segmentations, height, width):
     masks = []

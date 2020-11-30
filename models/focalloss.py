@@ -47,9 +47,17 @@ class FocalLoss(nn.Module):
         if self.alpha is not None:
             at = self.alpha[target].view(-1).type_as(logpt)
             logpt = logpt * at
+            loss = -1 * (1-pt)**self.gamma * logpt
 
-        loss = -1 * (1-pt)**self.gamma * logpt
-        if self.size_average:
-            return loss.mean()
+            if self.size_average:
+                loss = loss.sum() / at.sum()
+                return loss
+            else:
+                return loss.sum()
         else:
-            return loss.sum()
+            loss = -1 * (1-pt)**self.gamma * logpt
+
+            if self.size_average:
+                return loss.mean()
+            else:
+                return loss.sum()

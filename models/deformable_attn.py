@@ -218,7 +218,7 @@ class DeformableHeadAttention(nn.Module):
         # B*M, H*W, C_v -> B, M, H, W, C_v
         feat = feat.view(nbatches, self.h, query_height, query_width, self.d_k)
         # B, M, H, W, C_v -> B, H, W, M, C_v
-        feat = feat.permute(0, 2, 3, 1, 4)
+        feat = feat.permute(0, 2, 3, 1, 4).contiguous()
         # B, H, W, M, C_v -> B, H, W, M * C_v
         feat = feat.view(nbatches, query_height, query_width, self.d_k * self.h)
 

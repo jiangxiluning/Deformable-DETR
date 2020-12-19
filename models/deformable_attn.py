@@ -215,10 +215,14 @@ class DeformableHeadAttention(nn.Module):
         # B*M, H*W, C_v
         feat = torch.einsum('nlds, nls -> nld', scale_features, A)
 
-        # B, H, W, C
+        # B*M, H*W, C_v -> B, M, H, W, C_v
+        feat = feat.view(nbatches, self.h, query_height, query_width, self.d_k)
+        # B, M, H, W, C_v -> B, H, W, M, C_v
+        feat = feat.permute(0, 2, 3, 1, 4)
+        # B, H, W, M, C_v -> B, H, W, M * C_v
         feat = feat.view(nbatches, query_height, query_width, self.d_k * self.h)
-        feat = self.wm_proj(feat)
 
+        feat = self.wm_proj(feat)
         if self.dropout:
             feat = self.dropout(feat)
 
